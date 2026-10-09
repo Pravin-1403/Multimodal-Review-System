@@ -1,9 +1,13 @@
 # VeriSight AI — Multimodal Evidence Review
-# Core dependencies
+# ============================================================
+# Core (always required)
 streamlit>=1.35.0
 Pillow>=10.0.0
 
-# Optional — install only the provider you configure
-# google-generativeai>=0.7.0    # for Gemini
-# openai>=1.30.0                 # for OpenAI GPT-4o
-# anthropic>=0.28.0              # for Anthropic Claude
+# AI providers — install the one you configure
+# (at least one is required for real AI analysis)
+google-genai>=2.0.0       # for GEMINI_API_KEY  (recommended — free tier available)
+openai>=1.0.0             # for OPENAI_API_KEY
+
+# python-dotenv — optional: load .env automatically
+# python-dotenv>=1.0.0
