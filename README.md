@@ -213,8 +213,8 @@ git add .
 # Create initial integration commit
 git commit -m "Prepare UI for AI integration"
 
-# Link your GitHub remote repository (replace with your actual GitHub URL)
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
+# Link your GitHub remote repository
+git remote add origin git@github.com:Pravin-1403/Multimodal-Review-System.git
 
 # Push to the main branch
 git push -u origin main
@@ -224,8 +224,8 @@ git push -u origin main
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
-cd "Module 1"
+git clone https://github.com/Pravin-1403/Multimodal-Review-System.git
+cd "Multimodal-Review-System"
 
 # Create a dedicated feature branch
 git checkout -b ai-integration
