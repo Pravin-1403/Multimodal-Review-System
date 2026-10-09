@@ -710,7 +710,8 @@ def _demo_response(claim_data: dict, uploaded_images: List[dict]) -> dict:
 def _extract_json(raw_text: str) -> dict:
     """
     Parse JSON from model output.
-    Handles: plain JSON, ```json ... ```, ``` ... ```, and leading/trailing text.
+    Handles: plain JSON, ```json ... ```, ``` ... ```, unescaped newlines, trailing commas,
+    and leading/trailing text.
     Raises json.JSONDecodeError if no valid JSON object is found.
     """
     text = raw_text.strip()
@@ -720,7 +721,22 @@ def _extract_json(raw_text: str) -> dict:
     end   = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         json_str = text[start : end + 1]
-        return json.loads(json_str)
+        try:
+            return json.loads(json_str, strict=False)
+        except Exception:
+            # Clean trailing commas
+            cleaned = re.sub(r',\s*([\]}])', r'\1', json_str)
+            try:
+                return json.loads(cleaned, strict=False)
+            except Exception:
+                pass
+
+            try:
+                dec = json.JSONDecoder(strict=False)
+                obj, _ = dec.raw_decode(json_str)
+                return obj
+            except Exception:
+                pass
 
     raise json.JSONDecodeError("No JSON object found", text, 0)
 
