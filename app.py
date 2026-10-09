@@ -755,6 +755,10 @@ def render_results():
             st.markdown(f"- **Object:** {result.get('object_type','')}")
             st.markdown(f"- **Damage Type:** {result.get('damage_type','—')}")
             st.markdown(f"- **Object Part:** {result.get('object_part','—')}")
+            if result.get("visible_parts"):
+                st.markdown(f"- **Visible Parts:** {', '.join(result.get('visible_parts', []))}")
+            if result.get("unassessed_parts"):
+                st.markdown(f"- **Unassessed Parts:** {', '.join(result.get('unassessed_parts', []))}")
             st.markdown(f"- **Severity:** {result.get('severity','')}")
             st.markdown(f"- **Image Quality:** {result.get('image_quality','')}")
             st.markdown(f"- **Timestamp:** {result.get('timestamp','')}")

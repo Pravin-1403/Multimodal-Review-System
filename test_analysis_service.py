@@ -55,6 +55,8 @@ VALID_MODEL_JSON = {
     "object_type": "Car",
     "damage_type": "Cracked front bumper",
     "object_part": "Front Bumper",
+    "visible_parts": ["Front Bumper", "Grille", "Hood"],
+    "unassessed_parts": ["Rear Bumper", "Side Doors"],
     "severity": "MEDIUM",
     "supporting_image_ids": ["IMG_01"],
     "evidence_findings": [
@@ -72,7 +74,7 @@ VALID_MODEL_JSON = {
     "risk_flags": [],
     "image_quality": "GOOD",
     "confidence": 0.87,
-    "justification": "The photographic evidence clearly shows damage consistent with the described claim.",
+    "justification": "The photographic evidence clearly shows damage consistent with the described claim. Visible parts: Front Bumper, Grille, Hood. Unassessed parts: Rear Bumper, Side Doors.",
     "missing_evidence": ["Interior view of bumper to rule out structural damage"],
 }
 
@@ -271,13 +273,178 @@ class TestAnalyzeClaimEndToEnd(unittest.TestCase):
         self.assertGreater(result["confidence"], 0.5)
 
     def test_contradicted_decision_returned_correctly(self):
-        contradicted = {**VALID_MODEL_JSON, "decision": "CONTRADICTED", "severity": "LOW"}
+        contradicted = {
+            **VALID_MODEL_JSON,
+            "decision": "CONTRADICTED",
+            "severity": "LOW",
+            "confidence": 0.92,
+            "visible_parts": ["Front Bumper", "Grille", "Headlights"],
+            "unassessed_parts": [],
+            "justification": "The front bumper assembly is fully and clearly visible in sharp focus and good lighting, showing completely intact paintwork with no cracks or deformation, directly contradicting the claim.",
+        }
         with patch.object(svc, "_detect_provider", return_value="gemini"), \
              patch.object(svc, "_get_api_key", return_value="FAKE_KEY"), \
              patch.object(svc, "_call_gemini", return_value=json.dumps(contradicted)):
             result = svc.analyze_claim(_make_claim(), _make_uploaded_images(1))
 
         self.assertEqual(result["decision"], "CONTRADICTED")
+        self.assertGreater(result["confidence"], 0.75)
+
+    def test_clear_damaged_surface_supported(self):
+        """Test case 1: Clear photograph of damaged surface yields SUPPORTED with high confidence."""
+        damaged_payload = {
+            **VALID_MODEL_JSON,
+            "decision": "SUPPORTED",
+            "severity": "MEDIUM",
+            "confidence": 0.91,
+            "object_part": "Front Bumper",
+            "visible_parts": ["Front Bumper", "Lower Grille"],
+            "unassessed_parts": ["Rear Bumper", "Side Quarter Panels"],
+            "supporting_image_ids": ["IMG_01"],
+            "evidence_findings": [
+                {
+                    "image_id": "IMG_01",
+                    "finding": "Sharp, clear horizontal crack measuring approx 12cm across the front bumper cover.",
+                    "relevance": "Directly corroborates the claimant's description of low-speed impact damage.",
+                }
+            ],
+            "justification": "The front bumper is clearly captured in close-up detail, showing a distinct crack consistent with the claimed collision.",
+        }
+        claim = _make_claim(description="Front bumper cracked after backing out", damage_type="Cracked bumper")
+        with patch.object(svc, "_detect_provider", return_value="gemini"), \
+             patch.object(svc, "_get_api_key", return_value="FAKE_KEY"), \
+             patch.object(svc, "_call_gemini", return_value=json.dumps(damaged_payload)):
+            result = svc.analyze_claim(claim, _make_uploaded_images(1))
+
+        self.assertEqual(result["decision"], "SUPPORTED")
+        self.assertGreater(result["confidence"], 0.75)
+        self.assertEqual(result["supporting_image_ids"], ["IMG_01"])
+        self.assertIn("Front Bumper", result["visible_parts"])
+
+    def test_clearly_visible_undamaged_surface_contradicted(self):
+        """Test case 2: Clearly visible undamaged claimed surface yields CONTRADICTED."""
+        undamaged_payload = {
+            **VALID_MODEL_JSON,
+            "decision": "CONTRADICTED",
+            "severity": "LOW",
+            "confidence": 0.94,
+            "object_part": "Front Bumper",
+            "visible_parts": ["Front Bumper", "Hood", "Grille"],
+            "unassessed_parts": [],
+            "supporting_image_ids": ["IMG_01"],
+            "evidence_findings": [
+                {
+                    "image_id": "IMG_01",
+                    "finding": "Front bumper is captured in full clarity and shows pristine, undamaged factory finish.",
+                    "relevance": "Directly contradicts the claim that the front bumper was shattered and crushed.",
+                }
+            ],
+            "justification": "Visible parts: Front bumper, hood, grille. The claimed front bumper is fully visible and in immaculate, undamaged condition, directly contradicting the claimed damage.",
+        }
+        claim = _make_claim(description="Front bumper was completely shattered", damage_type="Shattered bumper")
+        with patch.object(svc, "_detect_provider", return_value="gemini"), \
+             patch.object(svc, "_get_api_key", return_value="FAKE_KEY"), \
+             patch.object(svc, "_call_gemini", return_value=json.dumps(undamaged_payload)):
+            result = svc.analyze_claim(claim, _make_uploaded_images(1))
+
+        self.assertEqual(result["decision"], "CONTRADICTED")
+        self.assertGreater(result["confidence"], 0.75)
+        self.assertEqual(result["supporting_image_ids"], ["IMG_01"])
+
+    def test_wrong_angle_returns_insufficient_evidence(self):
+        """Test case 3: Image showing wrong angle (front view for rear damage claim) yields INSUFFICIENT_EVIDENCE."""
+        wrong_angle_payload = {
+            "claim_id": "CLM-TEST-001",
+            "decision": "INSUFFICIENT_EVIDENCE",
+            "object_type": "Car",
+            "damage_type": "Rear bumper dent",
+            "object_part": "Rear Bumper",
+            "visible_parts": ["Front Grille", "Hood", "Front Bumper", "Headlights"],
+            "unassessed_parts": ["Rear Bumper", "Tailgate", "Rear Quarter Panels"],
+            "severity": "UNKNOWN",
+            "supporting_image_ids": [],
+            "evidence_findings": [
+                {
+                    "image_id": "IMG_01",
+                    "finding": "Photograph shows direct front-view of vehicle. Rear bumper is not visible from this angle.",
+                    "relevance": "The claimed damage is to the rear bumper; this photograph does not depict the claimed area.",
+                }
+            ],
+            "risk_flags": [],
+            "image_quality": "GOOD",
+            "confidence": 0.35,
+            "justification": "Visible parts: Front grille, hood, headlights. Unassessed parts: Rear bumper is entirely absent from this photograph. Because the claimed damaged area was not photographed, the claim cannot be verified or denied.",
+            "missing_evidence": ["Photographs of the rear bumper from straight-on and 45-degree angles"],
+        }
+        claim = _make_claim(description="Rear bumper was crushed in parking lot collision", damage_type="Rear bumper dent")
+        with patch.object(svc, "_detect_provider", return_value="gemini"), \
+             patch.object(svc, "_get_api_key", return_value="FAKE_KEY"), \
+             patch.object(svc, "_call_gemini", return_value=json.dumps(wrong_angle_payload)):
+            result = svc.analyze_claim(claim, _make_uploaded_images(1))
+
+        self.assertEqual(result["decision"], "INSUFFICIENT_EVIDENCE")
+        # Requirement 7: Do not display high confidence when evidence is incomplete
+        self.assertLessEqual(result["confidence"], 0.45)
+        # Requirement 8: Supporting image IDs must be empty for INSUFFICIENT_EVIDENCE
+        self.assertEqual(result["supporting_image_ids"], [])
+        # Requirement 5: Do not generate risk flags for misrepresentation solely because damage is not visible
+        self.assertEqual(result["risk_flags"], [])
+        # Requirement 4: Explain visible vs unassessed parts
+        self.assertIn("Rear Bumper", result["unassessed_parts"])
+        self.assertIn("Front Grille", result["visible_parts"])
+
+    def test_contradicted_overridden_when_claimed_part_unassessed(self):
+        """Test case 4: Guardrail overrides CONTRADICTED to INSUFFICIENT_EVIDENCE when claimed part was unassessed."""
+        erroneous_contradiction = {
+            "claim_id": "CLM-TEST-001",
+            "decision": "CONTRADICTED",
+            "object_type": "Car",
+            "damage_type": "Rear bumper dent",
+            "object_part": "Rear Bumper",
+            "visible_parts": ["Front Bumper", "Grille"],
+            "unassessed_parts": ["Rear Bumper"],
+            "severity": "LOW",
+            "supporting_image_ids": ["IMG_01"],
+            "evidence_findings": [
+                {
+                    "image_id": "IMG_01",
+                    "finding": "Vehicle front shows no damage. Rear bumper is not visible in this image.",
+                    "relevance": "No damage observed on front view.",
+                }
+            ],
+            "risk_flags": ["Damage not observed on front view"],
+            "image_quality": "GOOD",
+            "confidence": 0.90,  # Erroneous high confidence
+            "justification": "Vehicle appears undamaged from front, though rear bumper is not visible from this angle.",
+            "missing_evidence": ["Rear photos"],
+        }
+        claim = _make_claim(description="Rear bumper dented", damage_type="Rear bumper dent")
+        result = svc._normalize_response(erroneous_contradiction, claim, ["IMG_01"])
+
+        # Must be overridden to INSUFFICIENT_EVIDENCE
+        self.assertEqual(result["decision"], "INSUFFICIENT_EVIDENCE")
+        # Confidence must be clamped to <= 0.45
+        self.assertLessEqual(result["confidence"], 0.45)
+        # Supporting IDs must be cleared
+        self.assertEqual(result["supporting_image_ids"], [])
+        # Generic 'damage not visible' risk flag must be stripped
+        self.assertEqual(result["risk_flags"], [])
+
+    def test_spurious_misrepresentation_risk_flag_filtered(self):
+        """Test case 5: Spurious misrepresentation flag based solely on damage absence is filtered out."""
+        raw_with_bad_flag = {
+            **VALID_MODEL_JSON,
+            "decision": "INSUFFICIENT_EVIDENCE",
+            "confidence": 0.35,
+            "risk_flags": [
+                "Potential misrepresentation - damage claimed not visible in photo",
+                "Odometer reading mismatch with reported vehicle records",  # Valid concrete risk flag
+            ],
+        }
+        result = svc._normalize_response(raw_with_bad_flag, _make_claim(), ["IMG_01", "IMG_02"])
+        # The spurious misrepresentation flag must be stripped, while genuine concrete flag is preserved
+        self.assertEqual(len(result["risk_flags"]), 1)
+        self.assertIn("Odometer reading mismatch", result["risk_flags"][0])
 
     def test_blurry_image_returns_insufficient(self):
         blurry_response = {
