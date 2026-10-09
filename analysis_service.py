@@ -56,8 +56,9 @@ logger = logging.getLogger(__name__)
 ALLOWED_DECISIONS  = {"SUPPORTED", "CONTRADICTED", "INSUFFICIENT_EVIDENCE"}
 ALLOWED_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "UNKNOWN"}
 
-# Gemini model to use — gemini-1.5-flash is fast, cheap, and vision-capable
-GEMINI_MODEL   = "gemini-1.5-flash"
+# Gemini model to use — gemini-2.5-flash is fast, cheap, and vision-capable in google-genai SDK
+GEMINI_MODEL          = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]
 # OpenAI model to use — gpt-4o supports vision
 OPENAI_MODEL   = "gpt-4o"
 # Max image dimension (pixels) before encoding — keeps payload small
@@ -239,7 +240,7 @@ def _call_gemini(api_key: str, prompt: str, uploaded_images: List[dict]) -> str:
     Call Google Gemini vision model using the NEW google-genai SDK (v2+).
 
     SDK: pip install google-genai>=2.0.0
-    Model: gemini-1.5-flash  (vision-capable, cost-effective)
+    Model: gemini-2.5-flash  (vision-capable, cost-effective, high quality)
     """
     import google.genai as genai          # type: ignore
     from google.genai import types        # type: ignore
@@ -261,15 +262,34 @@ def _call_gemini(api_key: str, prompt: str, uploaded_images: List[dict]) -> str:
     # Append the structured text prompt
     parts.append(types.Part(text=prompt))
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=parts,
-        config=types.GenerateContentConfig(
-            temperature=0.1,            # low temperature for factual JSON output
-            max_output_tokens=2048,
-        ),
-    )
-    return response.text
+    # Candidate models to try in order of preference
+    candidate_models = [GEMINI_MODEL]
+    for fallback in GEMINI_FALLBACK_MODELS:
+        if fallback not in candidate_models:
+            candidate_models.append(fallback)
+
+    last_exc = None
+    for model_name in candidate_models:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=parts,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,            # low temperature for factual JSON output
+                    max_output_tokens=2048,
+                ),
+            )
+            return response.text
+        except Exception as exc:
+            err_str = str(exc)
+            if "404" in err_str or "not found" in err_str.lower():
+                logger.warning("Gemini model '%s' not found (%s), trying next fallback...", model_name, exc)
+                last_exc = exc
+                continue
+            raise
+
+    if last_exc:
+        raise last_exc
 
 
 def _call_openai(api_key: str, prompt: str, uploaded_images: List[dict]) -> str:
@@ -552,23 +572,6 @@ def _extract_json(raw_text: str) -> dict:
     """
     text = raw_text.strip()
 
-    # Strip ``` code fences
-    if text.startswith("```"):
-        lines = text.split("\n")
-        # Remove first and last fence lines
-        inner_lines = []
-        in_fence = False
-        for line in lines:
-            if line.startswith("```"):
-                in_fence = not in_fence
-                continue
-            if in_fence or not inner_lines:
-                # Before first fence close
-                pass
-            inner_lines.append(line)
-        # Simpler approach: grab content between first { and last }
-        pass
-
     # Find the outermost JSON object
     start = text.find("{")
     end   = text.rfind("}")
@@ -612,12 +615,21 @@ def analyze_claim(claim_data: dict, uploaded_images: List[dict]) -> dict:
     except Exception as exc:
         logger.error("Teammate AI module error: %s", exc)
         return {
-            **_demo_response(claim_data, uploaded_images),
-            "is_demo": False,
-            "justification": (
-                f"Teammate AI module raised an error: {type(exc).__name__}: {exc}. "
-                "Check logs for details."
-            ),
+            "claim_id":            str(claim_data.get("claim_id") or "N/A"),
+            "decision":            "INSUFFICIENT_EVIDENCE",
+            "object_type":         str(claim_data.get("object_type") or ""),
+            "damage_type":         str(claim_data.get("damage_type") or ""),
+            "object_part":         "N/A",
+            "severity":            "UNKNOWN",
+            "supporting_image_ids": [],
+            "evidence_findings":   [],
+            "risk_flags":          [f"Teammate AI module error: {type(exc).__name__}: {exc}"],
+            "image_quality":       "UNKNOWN",
+            "confidence":          0.0,
+            "justification":       f"Teammate AI module raised an error: {type(exc).__name__}: {exc}.",
+            "missing_evidence":    [],
+            "is_demo":             False,
+            "timestamp":           datetime.datetime.now().isoformat(),
         }
 
     # ── Step 2: Detect configured provider ──────────────────────────────────
@@ -659,13 +671,32 @@ def analyze_claim(claim_data: dict, uploaded_images: List[dict]) -> dict:
         logger.error("Model returned unparseable JSON for claim %s: %s",
                      claim_data.get("claim_id"), exc)
         return {
-            **_demo_response(claim_data, uploaded_images),
-            "is_demo": False,
-            "justification": (
+            "claim_id":            str(claim_data.get("claim_id") or "N/A"),
+            "decision":            "INSUFFICIENT_EVIDENCE",
+            "object_type":         str(claim_data.get("object_type") or ""),
+            "damage_type":         str(claim_data.get("damage_type") or ""),
+            "object_part":         "N/A",
+            "severity":            "UNKNOWN",
+            "supporting_image_ids": [],
+            "evidence_findings":   [
+                {
+                    "image_id": iid,
+                    "finding": "The AI model response could not be parsed as structured JSON.",
+                    "relevance": "Unable to extract visual findings.",
+                }
+                for iid in image_ids
+            ],
+            "risk_flags":          ["Model returned unparseable response"],
+            "image_quality":       "UNKNOWN",
+            "confidence":          0.0,
+            "justification":       (
                 f"The AI model's response could not be parsed as JSON. "
                 f"Provider: {provider}. "
                 "This may be a temporary model issue — please try again."
             ),
+            "missing_evidence":    ["Please resubmit the claim for re-analysis."],
+            "is_demo":             False,
+            "timestamp":           datetime.datetime.now().isoformat(),
         }
 
     except Exception as exc:
@@ -674,31 +705,55 @@ def analyze_claim(claim_data: dict, uploaded_images: List[dict]) -> dict:
         err_msg  = str(exc)
         logger.error("Provider call failed [%s]: %s", err_type, err_msg)
 
-        # Produce a user-friendly message without exposing API key details
-        if "api_key" in err_msg.lower() or "authentication" in err_msg.lower() or "401" in err_msg:
+        lowered = err_msg.lower()
+        if "api_key" in lowered or "authentication" in lowered or "401" in err_msg or "permission_denied" in lowered:
             user_msg = (
                 f"API key authentication failed for provider '{provider}'. "
                 "Please verify your key is correct and has the required permissions."
             )
-        elif "quota" in err_msg.lower() or "rate" in err_msg.lower() or "429" in err_msg:
+        elif "quota" in lowered or "rate limit" in lowered or "ratelimit" in lowered or "429" in err_msg or "resource_exhausted" in lowered:
             user_msg = (
                 f"Rate limit or quota exceeded for provider '{provider}'. "
                 "Please wait a moment and try again."
             )
-        elif "timeout" in err_msg.lower() or "timed out" in err_msg.lower():
+        elif "timeout" in lowered or "timed out" in lowered:
             user_msg = (
                 "The analysis request timed out. "
                 "This may be due to large images or network issues. "
                 "Please try again with fewer or smaller images."
             )
+        elif "404" in err_msg or "not found" in lowered:
+            user_msg = (
+                f"Configured model for provider '{provider}' was not found. "
+                "Please check the model name or API version."
+            )
         else:
             user_msg = (
-                f"Analysis failed ({err_type}). "
+                f"Analysis failed ({err_type}): {err_msg[:120]}. "
                 "Please check your API configuration and network connectivity."
             )
 
         return {
-            **_demo_response(claim_data, uploaded_images),
-            "is_demo": False,
-            "justification": user_msg,
+            "claim_id":            str(claim_data.get("claim_id") or "N/A"),
+            "decision":            "INSUFFICIENT_EVIDENCE",
+            "object_type":         str(claim_data.get("object_type") or ""),
+            "damage_type":         str(claim_data.get("damage_type") or ""),
+            "object_part":         "N/A",
+            "severity":            "UNKNOWN",
+            "supporting_image_ids": [],
+            "evidence_findings":   [
+                {
+                    "image_id": iid,
+                    "finding": f"Automated analysis failed: {user_msg}",
+                    "relevance": "Unable to verify physical evidence against claim.",
+                }
+                for iid in image_ids
+            ],
+            "risk_flags":          [f"Provider call failed: {user_msg}"],
+            "image_quality":       "UNKNOWN",
+            "confidence":          0.0,
+            "justification":       f"Analysis could not be completed: {user_msg}",
+            "missing_evidence":    ["Please re-try the claim submission once provider service is available."],
+            "is_demo":             False,
+            "timestamp":           datetime.datetime.now().isoformat(),
         }

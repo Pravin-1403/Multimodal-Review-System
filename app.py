@@ -113,6 +113,15 @@ section[data-testid="stSidebar"] .stButton button:hover {
     box-shadow: 0 2px 16px rgba(13,27,42,0.07);
 }
 
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: #FFFFFF !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 18px !important;
+    padding: 24px !important;
+    box-shadow: 0 2px 14px rgba(13,27,42,0.06) !important;
+    margin-bottom: 20px !important;
+}
+
 /* ── Decision badges ────────────────────────────────────────── */
 .badge {
     display: inline-block;
@@ -439,117 +448,115 @@ def render_new_claim():
     # ── Claim form ──────────────────────────────────────────────────────────
     rk = st.session_state.form_reset_key   # used in widget keys for reset
 
-    st.markdown('<div class="claim-card">', unsafe_allow_html=True)
-    st.markdown('<p class="section-header">📋 Submit New Claim</p>', unsafe_allow_html=True)
-    st.markdown('<p class="section-sub">All fields marked * are required for analysis.</p>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<p class="section-header">📋 Submit New Claim</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-sub">All fields marked * are required for analysis.</p>', unsafe_allow_html=True)
 
-    col_a, col_b = st.columns([1, 1])
+        col_a, col_b = st.columns([1, 1])
 
-    with col_a:
-        claim_id_display = _new_claim_id()
-        st.text_input(
-            "Claim ID (auto-generated)",
-            value=claim_id_display,
-            disabled=True,
-            key=f"claim_id_display_{rk}",
-        )
-        object_type = st.selectbox(
-            "Object Category *",
-            ["Car", "Laptop", "Package"],
-            key=f"object_type_{rk}",
-        )
-        damage_type = st.text_input(
-            "Claimed Damage Type (optional)",
-            placeholder="e.g. Cracked screen, Dented door, Water damage",
-            key=f"damage_type_{rk}",
-        )
-
-    with col_b:
-        incident_date = st.date_input(
-            "Incident Date (optional)",
-            value=None,
-            key=f"incident_date_{rk}",
-        )
-        history = st.text_area(
-            "Prior Claim History / Notes (optional)",
-            placeholder="Previous incidents, repair records, or additional context…",
-            height=108,
-            key=f"history_{rk}",
-        )
-
-    description = st.text_area(
-        "Claim Description *",
-        placeholder="Describe the damage, how it occurred, and any relevant circumstances…",
-        height=120,
-        key=f"description_{rk}",
-    )
-
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    st.markdown("**Evidence Images *** *(up to 8 images, 10 MB each)*")
-    uploaded_files = st.file_uploader(
-        "Upload images",
-        type=["jpg", "jpeg", "png", "webp", "bmp"],
-        accept_multiple_files=True,
-        key=f"file_uploader_{rk}",
-        label_visibility="collapsed",
-    )
-
-    # Image validation & thumbnails
-    valid_images = []
-    if uploaded_files:
-        errors = []
-        for uf in uploaded_files[:MAX_IMAGES]:
-            size_mb = uf.size / (1024 * 1024)
-            if size_mb > MAX_IMAGE_MB:
-                errors.append(f"⚠️ {uf.name} is {size_mb:.1f} MB — exceeds {MAX_IMAGE_MB} MB limit.")
-                continue
-            try:
-                img = Image.open(uf).convert("RGB")
-                valid_images.append({"file": uf, "pil": img})
-            except Exception:
-                errors.append(f"⚠️ {uf.name} could not be opened as an image.")
-
-        if len(uploaded_files) > MAX_IMAGES:
-            st.warning(f"Only the first {MAX_IMAGES} images will be used.")
-        for e in errors:
-            st.error(e)
-
-        if valid_images:
-            st.markdown("**Uploaded Evidence Previews:**")
-            cols = st.columns(min(len(valid_images), 4))
-            for idx, vi in enumerate(valid_images):
-                with cols[idx % 4]:
-                    st.image(vi["pil"], use_container_width=True)
-                    name = vi["file"].name
-                    short = name[:18] + "…" if len(name) > 18 else name
-                    st.markdown(f'<div class="thumb-label">IMG_{idx+1:02d} · {short}</div>', unsafe_allow_html=True)
-
-    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-    submit_btn = st.button("🔍  Submit for Analysis", type="primary", key=f"submit_{rk}")
-
-    if submit_btn:
-        # Validation
-        errs = []
-        if not description.strip():
-            errs.append("Claim description is required.")
-        if not valid_images:
-            errs.append("At least one valid evidence image is required.")
-        if errs:
-            for e in errs:
-                st.error(f"❌ {e}")
-        else:
-            _run_analysis(
-                claim_id=claim_id_display,
-                object_type=object_type,
-                description=description,
-                damage_type=damage_type,
-                incident_date=str(incident_date) if incident_date else "",
-                history=history,
-                valid_images=valid_images,
+        with col_a:
+            claim_id_display = _new_claim_id()
+            st.text_input(
+                "Claim ID (auto-generated)",
+                value=claim_id_display,
+                disabled=True,
+                key=f"claim_id_display_{rk}",
+            )
+            object_type = st.selectbox(
+                "Object Category *",
+                ["Car", "Laptop", "Package"],
+                key=f"object_type_{rk}",
+            )
+            damage_type = st.text_input(
+                "Claimed Damage Type (optional)",
+                placeholder="e.g. Cracked screen, Dented door, Water damage",
+                key=f"damage_type_{rk}",
             )
 
-    st.markdown('</div>', unsafe_allow_html=True)   # close .claim-card
+        with col_b:
+            incident_date = st.date_input(
+                "Incident Date (optional)",
+                value=None,
+                key=f"incident_date_{rk}",
+            )
+            history = st.text_area(
+                "Prior Claim History / Notes (optional)",
+                placeholder="Previous incidents, repair records, or additional context…",
+                height=108,
+                key=f"history_{rk}",
+            )
+
+        description = st.text_area(
+            "Claim Description *",
+            placeholder="Describe the damage, how it occurred, and any relevant circumstances…",
+            height=120,
+            key=f"description_{rk}",
+        )
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        st.markdown("**Evidence Images *** *(up to 8 images, 10 MB each)*")
+        uploaded_files = st.file_uploader(
+            "Upload images",
+            type=["jpg", "jpeg", "png", "webp", "bmp"],
+            accept_multiple_files=True,
+            key=f"file_uploader_{rk}",
+            label_visibility="collapsed",
+        )
+
+        # Image validation & thumbnails
+        valid_images = []
+        if uploaded_files:
+            errors = []
+            for uf in uploaded_files[:MAX_IMAGES]:
+                size_mb = uf.size / (1024 * 1024)
+                if size_mb > MAX_IMAGE_MB:
+                    errors.append(f"⚠️ {uf.name} is {size_mb:.1f} MB — exceeds {MAX_IMAGE_MB} MB limit.")
+                    continue
+                try:
+                    img = Image.open(uf).convert("RGB")
+                    valid_images.append({"file": uf, "pil": img})
+                except Exception:
+                    errors.append(f"⚠️ {uf.name} could not be opened as an image.")
+
+            if len(uploaded_files) > MAX_IMAGES:
+                st.warning(f"Only the first {MAX_IMAGES} images will be used.")
+            for e in errors:
+                st.error(e)
+
+            if valid_images:
+                st.markdown("**Uploaded Evidence Previews:**")
+                cols = st.columns(min(len(valid_images), 4))
+                for idx, vi in enumerate(valid_images):
+                    with cols[idx % 4]:
+                        st.image(vi["pil"], use_container_width=True)
+                        name = vi["file"].name
+                        short = name[:18] + "…" if len(name) > 18 else name
+                        st.markdown(f'<div class="thumb-label">IMG_{idx+1:02d} · {short}</div>', unsafe_allow_html=True)
+
+        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+        submit_btn = st.button("🔍  Submit for Analysis", type="primary", key=f"submit_{rk}")
+
+        if submit_btn:
+            # Validation
+            errs = []
+            if not description.strip():
+                errs.append("Claim description is required.")
+            if not valid_images:
+                errs.append("At least one valid evidence image is required.")
+            if errs:
+                for e in errs:
+                    st.error(f"❌ {e}")
+            else:
+                _run_analysis(
+                    claim_id=claim_id_display,
+                    object_type=object_type,
+                    description=description,
+                    damage_type=damage_type,
+                    incident_date=str(incident_date) if incident_date else "",
+                    history=history,
+                    valid_images=valid_images,
+                )
 
 
 def _run_analysis(claim_id, object_type, description, damage_type,
@@ -650,34 +657,33 @@ def render_results():
         </div>""", unsafe_allow_html=True)
 
     # ── A. Final assessment ─────────────────────────────────────────────────
-    st.markdown('<div class="claim-card">', unsafe_allow_html=True)
-    st.markdown('<p class="section-header">🏷️ Final Assessment</p>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<p class="section-header">🏷️ Final Assessment</p>', unsafe_allow_html=True)
 
-    ac1, ac2, ac3 = st.columns(3)
-    with ac1:
-        st.markdown(f'<span class="badge {badge_cls}">{badge_text}</span>', unsafe_allow_html=True)
-        sev_cls = SEV_CLASS.get(sev, "sev-unknown")
-        st.markdown(f"<div style='margin-top:10px;font-size:0.85rem;color:#64748B;'>Severity: <span class='{sev_cls}'>{sev}</span></div>", unsafe_allow_html=True)
-    with ac2:
-        st.markdown(f"""
-        <div>
-            <div style='font-size:0.75rem;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:0.06em;'>AI Confidence Estimate</div>
-            <div style='font-size:1.8rem;font-weight:800;color:#2563EB;'>{conf_pct}%</div>
-            <div class="conf-bar-track"><div class="conf-bar-fill" style="width:{conf_pct}%;"></div></div>
-            <div style='font-size:0.68rem;color:#94A3B8;margin-top:4px;'>Estimate only — not a calibrated probability</div>
-        </div>""", unsafe_allow_html=True)
-    with ac3:
-        st.markdown(f"""
-        <div>
-            <div style='font-size:0.75rem;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:0.06em;'>Object / Damage</div>
-            <div style='font-weight:600;color:#0D1B2A;margin-top:4px;'>{result.get('object_type','')}</div>
-            <div style='color:#475569;font-size:0.88rem;'>{result.get('damage_type','—')}</div>
-            <div style='color:#94A3B8;font-size:0.82rem;margin-top:4px;'>Part: {result.get('object_part','—')}</div>
-        </div>""", unsafe_allow_html=True)
+        ac1, ac2, ac3 = st.columns(3)
+        with ac1:
+            st.markdown(f'<span class="badge {badge_cls}">{badge_text}</span>', unsafe_allow_html=True)
+            sev_cls = SEV_CLASS.get(sev, "sev-unknown")
+            st.markdown(f"<div style='margin-top:10px;font-size:0.85rem;color:#64748B;'>Severity: <span class='{sev_cls}'>{sev}</span></div>", unsafe_allow_html=True)
+        with ac2:
+            st.markdown(f"""
+            <div>
+                <div style='font-size:0.75rem;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:0.06em;'>AI Confidence Estimate</div>
+                <div style='font-size:1.8rem;font-weight:800;color:#2563EB;'>{conf_pct}%</div>
+                <div class="conf-bar-track"><div class="conf-bar-fill" style="width:{conf_pct}%;"></div></div>
+                <div style='font-size:0.68rem;color:#94A3B8;margin-top:4px;'>Estimate only — not a calibrated probability</div>
+            </div>""", unsafe_allow_html=True)
+        with ac3:
+            st.markdown(f"""
+            <div>
+                <div style='font-size:0.75rem;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:0.06em;'>Object / Damage</div>
+                <div style='font-weight:600;color:#0D1B2A;margin-top:4px;'>{result.get('object_type','')}</div>
+                <div style='color:#475569;font-size:0.88rem;'>{result.get('damage_type','—')}</div>
+                <div style='color:#94A3B8;font-size:0.82rem;margin-top:4px;'>Part: {result.get('object_part','—')}</div>
+            </div>""", unsafe_allow_html=True)
 
-    st.markdown("<hr class='vs-divider'>", unsafe_allow_html=True)
-    st.markdown(f"<div style='font-size:0.9rem;color:#334155;line-height:1.6;'>{result.get('justification','')}</div>", unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("<hr class='vs-divider'>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:0.9rem;color:#334155;line-height:1.6;'>{result.get('justification','')}</div>", unsafe_allow_html=True)
 
     st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
@@ -696,26 +702,24 @@ def render_results():
             cols = st.columns(cols_per_row)
             for col, iid in zip(cols, row_ids):
                 with col:
-                    is_highlighted = iid in supporting_ids
-                    card_cls = "evidence-card highlighted" if is_highlighted else "evidence-card"
-                    st.markdown(f'<div class="{card_cls}">', unsafe_allow_html=True)
-                    st.markdown(f'<span class="img-id-tag">{iid}</span>', unsafe_allow_html=True)
-                    if iid in pil_images:
-                        st.image(pil_images[iid], use_container_width=True)
-                    fn = filenames.get(iid, "")
-                    st.markdown(f"<div class='thumb-label' style='text-align:left;margin-top:6px;'>{fn}</div>", unsafe_allow_html=True)
+                    with st.container(border=True):
+                        is_highlighted = iid in supporting_ids
+                        tag_extra = " · CITED" if is_highlighted else ""
+                        st.markdown(f'<span class="img-id-tag">{iid}{tag_extra}</span>', unsafe_allow_html=True)
+                        if iid in pil_images:
+                            st.image(pil_images[iid], use_container_width=True)
+                        fn = filenames.get(iid, "")
+                        st.markdown(f"<div class='thumb-label' style='text-align:left;margin-top:6px;'>{fn}</div>", unsafe_allow_html=True)
 
-                    if iid in findings_by_id:
-                        f = findings_by_id[iid]
-                        st.markdown(f"""
-                        <div style='margin-top:10px;font-size:0.82rem;'>
-                            <div style='font-weight:600;color:#1E293B;'>{f['finding']}</div>
-                            <div style='color:#64748B;margin-top:3px;'>{f['relevance']}</div>
-                        </div>""", unsafe_allow_html=True)
-                    else:
-                        st.markdown("<div style='font-size:0.8rem;color:#94A3B8;margin-top:8px;'>No specific finding for this image.</div>", unsafe_allow_html=True)
-
-                    st.markdown('</div>', unsafe_allow_html=True)
+                        if iid in findings_by_id:
+                            f = findings_by_id[iid]
+                            st.markdown(f"""
+                            <div style='margin-top:10px;font-size:0.82rem;'>
+                                <div style='font-weight:600;color:#1E293B;'>{f['finding']}</div>
+                                <div style='color:#64748B;margin-top:3px;'>{f['relevance']}</div>
+                            </div>""", unsafe_allow_html=True)
+                        else:
+                            st.markdown("<div style='font-size:0.8rem;color:#94A3B8;margin-top:8px;'>No specific finding for this image.</div>", unsafe_allow_html=True)
     else:
         st.info("No images available for display.")
 
