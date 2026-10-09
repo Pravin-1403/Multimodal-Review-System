@@ -1,0 +1,41 @@
+# Byte-compiled / optimized / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+ENV.local/
+
+# Environment variables & credentials (NEVER commit secrets!)
+.env
+.env.local
+.env.*.local
+.streamlit/secrets.toml
+
+# Streamlit upload / cache temporary files
+.streamlit/cache/
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor and IDE directories
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Application logs
+*.log
