@@ -571,83 +571,19 @@ def render_new_claim():
 
     render_stat_cards()
 
-    # ── Interactive 1-Click Forensic Scenario Presets ─────────────────────
-    st.markdown('<p class="section-header">⚡ 1-Click Forensic Prototype Scenarios</p>', unsafe_allow_html=True)
-    st.markdown('<p class="section-sub">Select any sample scenario to instantly populate claim parameters and load high-resolution evidence images.</p>', unsafe_allow_html=True)
-
-    pcol1, pcol2, pcol3 = st.columns(3)
-
-    for col, (sc_key, sc_info) in zip([pcol1, pcol2, pcol3], SAMPLE_SCENARIOS.items()):
-        with col:
-            with st.container(border=True):
-                st.markdown(f"""
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <span style="font-size:1.4rem;">{sc_info['icon']}</span>
-                    <span class="sev-pill sev-{ 'low' if sc_info['badge_color']=='green' else ('high' if sc_info['badge_color']=='red' else 'medium') }">
-                        {sc_info['expected']}
-                    </span>
-                </div>
-                <div style="font-weight:700; font-size:1rem; color:#0F172A; margin-bottom:4px;">{sc_info['title']}</div>
-                <div style="font-size:0.8rem; color:#64748B; min-height:42px; margin-bottom:12px;">{sc_info['summary']}</div>
-                """, unsafe_allow_html=True)
-
-                if st.button(f"Load {sc_info['category']} Scenario", key=f"btn_preset_{sc_key}", use_container_width=True):
-                    # Load PIL image
-                    try:
-                        pil_img = Image.open(sc_info["image_file"]).convert("RGB")
-                        st.session_state.active_preset = sc_key
-                        st.session_state.loaded_preset_image = pil_img
-                        st.session_state.loaded_preset_meta = {
-                            "name": sc_info["image_name"],
-                            "path": sc_info["image_file"],
-                        }
-                        st.session_state.form_reset_key += 1
-                        st.toast(f"Loaded {sc_info['title']}!", icon="✨")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to load preset image: {e}")
-
-    # Active Scenario Banner
-    active_key = st.session_state.active_preset
-    preset_data = SAMPLE_SCENARIOS.get(active_key) if active_key else None
-
-    if preset_data and st.session_state.loaded_preset_image:
-        st.markdown(f"""
-        <div style="background:#EFF6FF; border:1.5px solid #93C5FD; border-radius:14px; padding:14px 20px; margin: 18px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <div>
-                <span style="font-weight:800; color:#1D4ED8; font-size:0.95rem;">⚡ Active Scenario: {preset_data['title']}</span>
-                <span style="margin-left:8px; font-size:0.84rem; color:#3B82F6;">({preset_data['image_name']}) pre-loaded</span>
-            </div>
-            <div>
-                <span style="font-size:0.8rem; color:#64748B;">Ready for instant analysis</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
     rk = st.session_state.form_reset_key
 
     # ── Claim Intake Form ──────────────────────────────────────────────────
     with st.container(border=True):
-        fcol1, fcol2 = st.columns([4, 1])
-        with fcol1:
-            st.markdown('<p class="section-header">📋 Claim Evidence Submission</p>', unsafe_allow_html=True)
-            st.markdown('<p class="section-sub">Provide damage details and attach high-fidelity photographic evidence.</p>', unsafe_allow_html=True)
-        with fcol2:
-            if preset_data:
-                if st.button("🔄 Clear Preset", key="clear_preset_btn"):
-                    st.session_state.active_preset = None
-                    st.session_state.loaded_preset_image = None
-                    st.session_state.loaded_preset_meta = None
-                    st.session_state.form_reset_key += 1
-                    st.rerun()
+        st.markdown('<p class="section-header">📋 Claim Evidence Submission</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-sub">Provide damage details and attach high-fidelity photographic evidence.</p>', unsafe_allow_html=True)
 
         col_a, col_b = st.columns([1, 1])
 
-        # Pre-fill defaults if preset active
-        default_obj = preset_data["category"] if preset_data else "Car"
-        default_dmg = preset_data["damage_type"] if preset_data else ""
-        default_desc = preset_data["description"] if preset_data else ""
-        default_hist = preset_data["history"] if preset_data else ""
+        default_obj = "Car"
+        default_dmg = ""
+        default_desc = ""
+        default_hist = ""
 
         with col_a:
             claim_id_display = _new_claim_id()
